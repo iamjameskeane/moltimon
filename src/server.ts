@@ -3,7 +3,14 @@
 import { config } from 'dotenv';
 config();
 
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import express from 'express';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import {
@@ -348,10 +355,31 @@ export async function main() {
     host: '0.0.0.0', // Bind to all interfaces
     allowedHosts: ['localhost', '127.0.0.1', '172.21.0.1', '172.22.0.1', '172.23.0.1', 'moltimon', 'moltimon-tacg_moltimon_1'] // Allow these hosts
   });
-  
+
   // Health check endpoint
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'moltimon-mcp' });
+  });
+
+  // Serve static files from src/public
+  const publicPath = path.join(__dirname, '..', 'src', 'public');
+  app.use(express.static(publicPath));
+
+  // Home page - serve index.html (using /home instead of / because MCP SDK intercepts /)
+  app.get('/home', (req, res) => {
+    res.sendFile(path.join(publicPath, 'index.html'));
+  });
+
+  // Redirect root to /home
+  app.get('/', (req, res) => {
+    res.redirect('/home');
+  });
+
+  // Skills markdown documentation
+  app.get('/skills.md', (req, res) => {
+    const skillPath = path.join(__dirname, '..', 'SKILL.md');
+    res.setHeader('Content-Type', 'text/markdown');
+    res.sendFile(skillPath);
   });
   
   // Helper function to create a new server instance
@@ -621,7 +649,7 @@ export async function main() {
       }
     }
   });
-  
+
   // Start the HTTP server
   app.listen(port, () => {
     console.error(`Moltimon MCP server running on HTTP port ${port}`);

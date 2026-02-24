@@ -15,6 +15,7 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src/ ./src/
 COPY schema.sql ./
+COPY SKILL.md ./
 
 # Build the application
 RUN npm run build
