@@ -4,8 +4,8 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "3000:3000"  # Public MCP server
-      - "3001:3001"  # Admin REST API
+      - "4000:3000"  # Public MCP server
+      - "4001:3001"  # Admin REST API
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
