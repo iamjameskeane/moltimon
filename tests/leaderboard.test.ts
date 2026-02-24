@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { createTestDatabase, seedTestData } from "./setup.ts";
 import { handleLeaderboard } from "../src/handlers/leaderboard.ts";
-import * as database from "../src/database.ts";
 
 describe("Leaderboard Handler", () => {
   let db: ReturnType<typeof createTestDatabase>;
@@ -9,7 +8,6 @@ describe("Leaderboard Handler", () => {
   beforeEach(() => {
     db = createTestDatabase();
     seedTestData(db);
-    vi.spyOn(database, "db", "get").mockReturnValue(db as any);
   });
 
   describe("handleLeaderboard", () => {
@@ -49,9 +47,11 @@ describe("Leaderboard Handler", () => {
     });
 
     it("should return empty leaderboard when no agents", () => {
-      // Clear agents
-      db.prepare("DELETE FROM agents").run();
+      // Delete all agents (need to delete from packs, cards, etc first due to foreign keys)
+      db.prepare("DELETE FROM packs").run();
+      db.prepare("DELETE FROM cards").run();
       db.prepare("DELETE FROM agent_stats").run();
+      db.prepare("DELETE FROM agents").run();
 
       const result = handleLeaderboard();
       const parsed = JSON.parse(result.content[0].text);

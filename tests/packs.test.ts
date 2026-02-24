@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { createTestDatabase, seedTestData } from "./setup.ts";
 import { handleGetPacks, handleOpenPack } from "../src/handlers/packs.ts";
-import * as database from "../src/database.ts";
 
 describe("Pack Handlers", () => {
   let db: ReturnType<typeof createTestDatabase>;
@@ -9,7 +8,6 @@ describe("Pack Handlers", () => {
   beforeEach(() => {
     db = createTestDatabase();
     seedTestData(db);
-    vi.spyOn(database, "db", "get").mockReturnValue(db as any);
   });
 
   describe("handleGetPacks", () => {

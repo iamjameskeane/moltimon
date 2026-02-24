@@ -10,8 +10,15 @@ describe("Battle Handlers", () => {
     db = createTestDatabase();
     seedTestData(db);
     
-    // Mock the database module
-    vi.spyOn(database, "db", "get").mockReturnValue(db as any);
+    // Create test agents with stats for battles
+    db.prepare(`INSERT OR IGNORE INTO agents (id, name) VALUES (?, ?)`).run("challenger", "Challenger");
+    db.prepare(`INSERT OR IGNORE INTO agent_stats (agent_id) VALUES (?)`).run("challenger");
+    db.prepare(`INSERT OR IGNORE INTO agents (id, name) VALUES (?, ?)`).run("defender", "Defender");
+    db.prepare(`INSERT OR IGNORE INTO agent_stats (agent_id) VALUES (?)`).run("defender");
+    
+    // Insert test cards for battles
+    db.prepare(`INSERT OR IGNORE INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`).run("challenger-card", 1, "common", 1, "challenger");
+    db.prepare(`INSERT OR IGNORE INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`).run("defender-card", 2, "common", 2, "defender");
   });
 
   describe("handleBattleChallenge", () => {
@@ -40,15 +47,10 @@ describe("Battle Handlers", () => {
 
   describe("handleBattleAccept", () => {
     it("should accept a battle and resolve it", () => {
-      // Setup battle
+      // Setup battle - use existing cards from beforeEach
       const battleId = "test-battle-1";
       const challengerCardId = "challenger-card";
       const defenderCardId = "defender-card";
-      
-      db.prepare(`INSERT INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`)
-        .run(challengerCardId, 1, "common", 1, "challenger");
-      db.prepare(`INSERT INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`)
-        .run(defenderCardId, 1, "common", 2, "defender");
       
       db.prepare(`INSERT INTO battles (id, challenger_id, defender_id, challenger_card_id, status) VALUES (?, ?, ?, ?, ?)`)
         .run(battleId, "challenger", "defender", challengerCardId, "pending");
@@ -71,6 +73,8 @@ describe("Battle Handlers", () => {
 
     it("should reject if defender doesn't own card", () => {
       const battleId = "test-battle-1";
+      // Need to create the agent first (card is already in beforeEach)
+      db.prepare(`INSERT OR IGNORE INTO agents (id, name) VALUES (?, ?)`).run("challenger", "Challenger");
       db.prepare(`INSERT INTO battles (id, challenger_id, defender_id, challenger_card_id, status) VALUES (?, ?, ?, ?, ?)`)
         .run(battleId, "challenger", "defender", "challenger-card", "pending");
 
@@ -84,6 +88,8 @@ describe("Battle Handlers", () => {
   describe("handleBattleDecline", () => {
     it("should decline a battle", () => {
       const battleId = "test-battle-1";
+      // Need to create the agent first (card is already in beforeEach)
+      db.prepare(`INSERT OR IGNORE INTO agents (id, name) VALUES (?, ?)`).run("challenger", "Challenger");
       db.prepare(`INSERT INTO battles (id, challenger_id, defender_id, challenger_card_id, status) VALUES (?, ?, ?, ?, ?)`)
         .run(battleId, "challenger", "defender", "challenger-card", "pending");
 

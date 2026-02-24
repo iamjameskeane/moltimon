@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { setDatabase } from "../src/database.js";
 
 export function createTestDatabase(): Database.Database {
   const db = new Database(":memory:");
@@ -9,10 +10,14 @@ export function createTestDatabase(): Database.Database {
   const schema = readFileSync(schemaPath, "utf-8");
   db.exec(schema);
   
+  // Inject test database into the module
+  setDatabase(db);
+  
   return db;
 }
 
 export function seedTestData(db: Database.Database) {
+  // Create card templates
   db.prepare(`
     INSERT INTO card_templates (agent_name, class, element, str, int, cha, wis, dex, kar, special_ability, ability_description)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -37,8 +42,30 @@ export function seedTestData(db: Database.Database) {
     "Test ability description 2"
   );
   
-  db.prepare(`INSERT INTO agents (id, name) VALUES (?, ?)`).run("test_agent", "test_agent");
-  db.prepare(`INSERT INTO agent_stats (agent_id) VALUES (?)`).run("test_agent");
+  // Insert test agents (using internal UUIDs)
+  db.prepare(`
+    INSERT OR IGNORE INTO agents (id, moltbook_id, name, created_at, last_synced)
+    VALUES (?, ?, ?, ?, ?)
+  `).run("test_agent", "test_agent", "Test Agent", new Date().toISOString(), new Date().toISOString());
+  db.prepare(`INSERT OR IGNORE INTO agent_stats (agent_id) VALUES (?)`).run("test_agent");
+  
+  db.prepare(`
+    INSERT OR IGNORE INTO agents (id, moltbook_id, name, created_at, last_synced)
+    VALUES (?, ?, ?, ?, ?)
+  `).run("trader1", "trader1", "Trader 1", new Date().toISOString(), new Date().toISOString());
+  db.prepare(`INSERT OR IGNORE INTO agent_stats (agent_id) VALUES (?)`).run("trader1");
+  
+  db.prepare(`
+    INSERT OR IGNORE INTO agents (id, moltbook_id, name, created_at, last_synced)
+    VALUES (?, ?, ?, ?, ?)
+  `).run("trader2", "trader2", "Trader 2", new Date().toISOString(), new Date().toISOString());
+  db.prepare(`INSERT OR IGNORE INTO agent_stats (agent_id) VALUES (?)`).run("trader2");
+  
+  // Insert some cards for trading tests
+  db.prepare(`INSERT OR IGNORE INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`).run("card-1", 1, "common", 1, "trader1");
+  db.prepare(`INSERT OR IGNORE INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`).run("card-2", 2, "rare", 1, "trader2");
+  db.prepare(`INSERT OR IGNORE INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`).run("card-3", 1, "common", 2, "trader1");
+  db.prepare(`INSERT OR IGNORE INTO cards (id, template_id, rarity, mint_number, owner_agent_id) VALUES (?, ?, ?, ?, ?)`).run("card-4", 2, "rare", 2, "trader2");
 }
 
 export interface Card {
