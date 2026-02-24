@@ -1,6 +1,18 @@
 version: '3.8'
 
 services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "3000:3000"  # Public MCP server
+      - "3001:3001"  # Admin REST API
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - moltimon
+    networks:
+      - moltimon-net
+
   moltimon:
     build: .
     volumes:
@@ -9,16 +21,11 @@ services:
       - NODE_ENV=production
       - DB_PATH=/data/moltimon.db
       - PORT=3000
+      - ADMIN_PORT=3001
     restart: unless-stopped
+    networks:
+      - moltimon-net
 
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./data/certs:/etc/nginx/certs:ro
-    depends_on:
-      - moltimon
-    restart: unless-stopped
+networks:
+  moltimon-net:
+    driver: bridge
