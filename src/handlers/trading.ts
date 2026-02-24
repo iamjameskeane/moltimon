@@ -12,14 +12,15 @@ export function handleTradeRequest(agentId: string, toAgent: string, offer: stri
     }
   }
 
-  // Verify target agent exists
-  getOrCreateAgent(toAgent, toAgent);
+  // Verify target agent exists (toAgent is the Moltbook ID)
+  // Use toAgent as Moltbook ID and name
+  const targetAgent = getOrCreateAgent(toAgent, toAgent);
 
   const tradeId = uuidv4();
   db.prepare(`
     INSERT INTO trades (id, from_agent_id, to_agent_id, offered_card_ids, wanted_card_ids)
     VALUES (?, ?, ?, ?, ?)
-  `).run(tradeId, agentId, toAgent, JSON.stringify(offer), JSON.stringify(want));
+  `).run(tradeId, agentId, targetAgent.id, JSON.stringify(offer), JSON.stringify(want));
 
   return {
     content: [{

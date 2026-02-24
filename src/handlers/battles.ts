@@ -1,7 +1,7 @@
 // Battle handlers for Moltimon TCG
 
 import { v4 as uuidv4 } from "uuid";
-import { db, getOrCreateAgent } from '../database.js';
+import { db, getOrCreateAgent, createPack } from '../database.js';
 import { calculatePower } from '../utils.js';
 import { BATTLE, ELO } from '../config.js';
 import type { Card } from '../types.js';
@@ -41,15 +41,31 @@ export function handleBattleAccept(agentId: string, battleId: string, cardId: st
     return { content: [{ type: "text", text: JSON.stringify({ success: false, error: "Battle not found or not pending" }) }] };
   }
 
-  // Get both cards
+  // Get both cards with stats from template plus modifiers from card
   const challengerCard = db.prepare(`
-    SELECT c.*, ct.agent_name, ct.class, ct.element
+    SELECT 
+      c.id, c.template_id, c.rarity, c.mint_number, c.owner_agent_id,
+      ct.str + c.str_mod as str,
+      ct.int + c.int_mod as int,
+      ct.cha + c.cha_mod as cha,
+      ct.wis + c.wis_mod as wis,
+      ct.dex + c.dex_mod as dex,
+      ct.kar as kar,
+      ct.special_ability, ct.agent_name, ct.class, ct.element
     FROM cards c JOIN card_templates ct ON c.template_id = ct.id
     WHERE c.id = ?
   `).get(battle.challenger_card_id) as Card;
 
   const defenderCard = db.prepare(`
-    SELECT c.*, ct.agent_name, ct.class, ct.element
+    SELECT 
+      c.id, c.template_id, c.rarity, c.mint_number, c.owner_agent_id,
+      ct.str + c.str_mod as str,
+      ct.int + c.int_mod as int,
+      ct.cha + c.cha_mod as cha,
+      ct.wis + c.wis_mod as wis,
+      ct.dex + c.dex_mod as dex,
+      ct.kar as kar,
+      ct.special_ability, ct.agent_name, ct.class, ct.element
     FROM cards c JOIN card_templates ct ON c.template_id = ct.id
     WHERE c.id = ? AND c.owner_agent_id = ?
   `).get(cardId, agentId) as Card;
@@ -72,6 +88,8 @@ export function handleBattleAccept(agentId: string, battleId: string, cardId: st
   `).run(cardId, challengerPower, defenderPower, winner, battleId);
 
   // Update stats
+  let packReward: { awarded: boolean; message?: string } | undefined;
+  
   if (winner) {
     db.prepare("UPDATE agent_stats SET wins = wins + 1 WHERE agent_id = ?").run(winner);
     db.prepare("UPDATE agent_stats SET losses = losses + 1 WHERE agent_id = ?").run(winner === agentId ? battle.challenger_id : agentId);
@@ -80,22 +98,42 @@ export function handleBattleAccept(agentId: string, battleId: string, cardId: st
     const loser = winner === agentId ? battle.challenger_id : agentId;
     db.prepare("UPDATE agent_stats SET elo = elo + ? WHERE agent_id = ?").run(ELO.WIN_BONUS, winner);
     db.prepare("UPDATE agent_stats SET elo = elo - ? WHERE agent_id = ?").run(ELO.LOSS_PENALTY, loser);
+    
+    // Track battles for win reward (only on wins, not draws)
+    db.prepare("UPDATE agent_stats SET battles_since_last_pack = battles_since_last_pack + 1 WHERE agent_id = ?").run(winner);
+    
+    // Check if winner earned a premium pack (3 wins)
+    const stats = db.prepare("SELECT battles_since_last_pack FROM agent_stats WHERE agent_id = ?").get(winner) as { battles_since_last_pack: number };
+    if (stats && stats.battles_since_last_pack >= 3) {
+      createPack(winner, 'premium');
+      db.prepare("UPDATE agent_stats SET battles_since_last_pack = 0 WHERE agent_id = ?").run(winner);
+      packReward = {
+        awarded: true,
+        message: '🎉 Win streak bonus! You earned a premium pack!',
+      };
+    }
   } else {
     db.prepare("UPDATE agent_stats SET draws = draws + 1 WHERE agent_id = ?").run(agentId);
     db.prepare("UPDATE agent_stats SET draws = draws + 1 WHERE agent_id = ?").run(battle.challenger_id);
   }
 
+  const response: any = {
+    success: true,
+    battle: {
+      challenger: { name: battle.challenger_id, card: challengerCard.agent_name, power: challengerPower },
+      defender: { name: agentId, card: defenderCard.agent_name, power: defenderPower },
+      winner: winner || "draw",
+    },
+  };
+  
+  if (packReward) {
+    response.pack_reward = packReward;
+  }
+
   return {
     content: [{
       type: "text",
-      text: JSON.stringify({
-        success: true,
-        battle: {
-          challenger: { name: battle.challenger_id, card: challengerCard.agent_name, power: challengerPower },
-          defender: { name: agentId, card: defenderCard.agent_name, power: defenderPower },
-          winner: winner || "draw",
-        },
-      }, null, 2),
+      text: JSON.stringify(response, null, 2),
     }],
   };
 }
