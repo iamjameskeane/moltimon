@@ -132,6 +132,17 @@ export class DimensionError extends Error {
 }
 
 /**
+ * Strips ANSI escape codes from a string to get visual width
+ * Handles: cursor movement, colors (3/4 bit, 256, truecolor), bold, etc.
+ */
+function stripAnsiCodes(str: string): string {
+  return str.replace(
+    /[\x1b\x9b](?:\[[0-9;]*[A-Za-z]|\(B)/g,
+    ''
+  );
+}
+
+/**
  * Validates that art dimensions match requirements exactly
  * @param art - The ASCII art to validate
  * @param requiredWidth - Required width in characters
@@ -145,10 +156,13 @@ export function validateArtDimensions(
 ): void {
   const lines = art.split('\n');
   const actualHeight = lines.length;
-  const actualWidth = lines.length > 0 ? lines[0].length : 0;
+  
+  // Strip ANSI codes to get visual width
+  const visualLines = lines.map((line) => stripAnsiCodes(line));
+  const actualWidth = visualLines.length > 0 ? visualLines[0].length : 0;
 
-  // Check all lines have same width
-  const widths = lines.map((line) => line.length);
+  // Check all lines have same visual width
+  const widths = visualLines.map((line) => line.length);
   const inconsistentWidths = widths.some((w) => w !== actualWidth);
 
   if (inconsistentWidths) {
