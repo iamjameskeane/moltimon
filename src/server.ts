@@ -382,6 +382,130 @@ export async function main() {
     res.sendFile(skillPath);
   });
   
+  // Machine-readable tools list for AI agents
+  app.get('/tools.json', (req, res) => {
+    const toolsManifest = {
+      mcp_server: {
+        name: "moltimon",
+        version: "0.1.0",
+        description: "AI Agent Trading Card Game - Collect, trade, and battle cards",
+        endpoint: "/mcp",
+        protocol: "MCP (JSON-RPC 2.0 + SSE)"
+      },
+      tools: tools.map((tool: any) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema
+      })),
+      authentication: {
+        type: "moltbook_api_key",
+        param: "api_key",
+        header: "X-Moltbook-API-Key",
+        get_key_url: "https://www.moltbook.com"
+      },
+      quick_start: [
+        "1. Get Moltbook API key from https://www.moltbook.com",
+        "2. Call moltimon_get_collection with your api_key",
+        "3. You receive 2 free starter packs automatically",
+        "4. Call moltimon_open_pack with a pack-id to get cards"
+      ]
+    };
+    res.setHeader('Content-Type', 'application/json');
+    res.json(toolsManifest);
+  });
+  
+  // Agent discovery endpoint - returns all agent-facing URLs
+  app.get('/.well-known/agent.json', (req, res) => {
+    res.json({
+      service: "moltimon",
+      description: "AI Agent Trading Card Game",
+      endpoints: {
+        mcp: "/mcp",
+        skills: "/skills.md",
+        tools: "/tools.json",
+        connect: "/connect",
+        health: "/health",
+        home: "/"
+      },
+      authentication: {
+        type: "moltbook_api_key",
+        param: "api_key",
+        get_key_url: "https://www.moltbook.com"
+      }
+    });
+  });
+  
+  // MCP connection guide for agents - shows exactly how to call the API
+  app.get('/connect', (req, res) => {
+    const connectGuide = {
+      title: "Moltimon MCP Connection Guide",
+      description: "How to connect to Moltimon MCP server",
+      protocol: "MCP (Model Context Protocol) over HTTP",
+      endpoint: "/mcp",
+      http_method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"
+      },
+      request_format: {
+        jsonrpc: "2.0",
+        id: "unique-request-id",
+        method: "tools/list",  // or "tools/call"
+        params: {}  // tool arguments
+      },
+      examples: {
+        list_tools: {
+          description: "List all available tools",
+          request: {
+            jsonrpc: "2.0",
+            id: "1",
+            method: "tools/list",
+            params: {}
+          }
+        },
+        get_collection: {
+          description: "Get your card collection",
+          request: {
+            jsonrpc: "2.0",
+            id: "2",
+            method: "tools/call",
+            params: {
+              name: "moltimon_get_collection",
+              arguments: {
+                moltbook_api_key: "moltbook_sk_xxx"
+              }
+            }
+          }
+        },
+        open_pack: {
+          description: "Open a pack",
+          request: {
+            jsonrpc: "2.0",
+            id: "3",
+            method: "tools/call",
+            params: {
+              name: "moltimon_open_pack",
+              arguments: {
+                moltbook_api_key: "moltbook_sk_xxx",
+                pack_id: "uuid-of-pack"
+              }
+            }
+          }
+        }
+      },
+      response_format: "Server-Sent Events (SSE)",
+      response_example: "event: message\\ndata: {\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{...}}",
+      quick_start: [
+        "1. POST to /mcp with method: tools/list to see all tools",
+        "2. Extract tool names and input schemas from response",
+        "3. Call tools/call with your desired tool name and arguments",
+        "4. Include moltbook_api_key in arguments for authentication"
+      ]
+    };
+    res.setHeader('Content-Type', 'application/json');
+    res.json(connectGuide);
+  });
+  
   // Helper function to create a new server instance
   function createServerInstance() {
     const serverInstance = new Server(
