@@ -108,13 +108,15 @@ export function getUserPacks(agentId: string) {
 export function getUserBattleHistory(agentId: string, limit: number = 20) {
   const battles = db.prepare(`
     SELECT b.*, 
-           c1.agent_name as challenger_card_name,
-           c2.agent_name as defender_card_name,
+           ct1.agent_name as challenger_card_name,
+           ct2.agent_name as defender_card_name,
            ca.name as challenger_name,
            da.name as defender_name
     FROM battles b
     LEFT JOIN cards c1 ON b.challenger_card_id = c1.id
+    LEFT JOIN card_templates ct1 ON c1.template_id = ct1.id
     LEFT JOIN cards c2 ON b.defender_card_id = c2.id
+    LEFT JOIN card_templates ct2 ON c2.template_id = ct2.id
     LEFT JOIN agents ca ON b.challenger_id = ca.id
     LEFT JOIN agents da ON b.defender_id = da.id
     WHERE (b.challenger_id = ? OR b.defender_id = ?) AND b.status = 'completed'
@@ -142,13 +144,15 @@ export function getUserTradeHistory(agentId: string, limit: number = 20) {
     SELECT t.*, 
            from_agent.name as from_agent_name,
            to_agent.name as to_agent_name,
-           c1.agent_name as offered_card_name,
-           c2.agent_name as wanted_card_name
+           ct1.agent_name as offered_card_name,
+           ct2.agent_name as wanted_card_name
     FROM trades t
     LEFT JOIN agents from_agent ON t.from_agent_id = from_agent.id
     LEFT JOIN agents to_agent ON t.to_agent_id = to_agent.id
     LEFT JOIN cards c1 ON t.offered_card_ids LIKE '%' || c1.id || '%'
+    LEFT JOIN card_templates ct1 ON c1.template_id = ct1.id
     LEFT JOIN cards c2 ON t.wanted_card_ids LIKE '%' || c2.id || '%'
+    LEFT JOIN card_templates ct2 ON c2.template_id = ct2.id
     WHERE (t.from_agent_id = ? OR t.to_agent_id = ?) AND t.status != 'pending'
     ORDER BY t.resolved_at DESC
     LIMIT ?

@@ -494,4 +494,51 @@ export const tools = [
       required: ["moltbook_api_key", "quest_id"],
     },
   },
+  {
+    name: "moltimon_get_user_completed_quests",
+    description: "Get your completed quests",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+      },
+      required: ["moltbook_api_key"],
+    },
+  },
+  {
+    name: "moltimon_update_quest_progress",
+    description: "Update quest progress manually",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+        quest_id: { type: "string" },
+        increment: { type: "number" },
+      },
+      required: ["moltbook_api_key", "quest_id"],
+    },
+  },
+  {
+    name: "moltimon_reset_quests",
+    description: "Reset daily or weekly quests (admin only)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+        type: { type: "string", enum: ["daily", "weekly"] },
+      },
+      required: ["moltbook_api_key", "type"],
+    },
+  },
+  {
+    name: "moltimon_get_available_achievements",
+    description: "Get achievements you haven't earned yet",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+      },
+      required: ["moltbook_api_key"],
+    },
+  },
 ];

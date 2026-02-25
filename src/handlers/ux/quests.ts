@@ -1,7 +1,7 @@
 // UX - Quest System handlers for Moltimon TCG
 
 import { v4 as uuidv4 } from "uuid";
-import { db } from '../../database.js';
+import { db, createPack } from '../../database.js';
 import { createNotification } from './notifications.js';
 import type { Quest, AgentQuest } from '../../types.js';
 
@@ -20,7 +20,7 @@ const QUESTS: Omit<Quest, 'id' | 'created_at'>[] = [
     description: 'Complete 2 trades today',
     type: 'daily',
     requirement: '{"trades_needed": 2, "reset_interval": "daily"}',
-    reward: '{"type": "moltbucks", "amount": 100}',
+    reward: '{"type": "pack", "pack_type": "standard"}',
     required_level: 1,
   },
   {
@@ -224,7 +224,7 @@ export function updateQuestProgress(agentId: string, questId: string, increment:
     };
   }
   
-  // Check if quest is now complete
+  // Get the updated progress after the increment
   const quest = db.prepare(`
     SELECT q.requirement, aq.progress
     FROM quests q
@@ -251,7 +251,7 @@ export function updateQuestProgress(agentId: string, questId: string, increment:
       text: JSON.stringify({
         success: true,
         message: "Progress updated",
-        new_progress: quest ? quest.progress + increment : 0,
+        new_progress: quest ? quest.progress : 0,
       }, null, 2),
     }],
   };
@@ -296,10 +296,12 @@ export function completeQuest(agentId: string, questId: string) {
   if (quest.reward) {
     const reward = JSON.parse(quest.reward);
     if (reward.type === 'pack' && reward.pack_type) {
-      // Award pack (could use createPack from database.ts)
-      // For now, just track in data
-    } else if (reward.type === 'moltbucks') {
-      // Update moltbucks (would need a new table or column)
+      // Award pack using createPack from database.ts
+      createPack(agentId, reward.pack_type);
+    } else if (reward.type === 'stat' && reward.stat) {
+      // Update stat in agent_stats
+      db.prepare(`UPDATE agent_stats SET ${reward.stat} = ${reward.stat} + ? WHERE agent_id = ?`)
+        .run(reward.amount, agentId);
     }
   }
   

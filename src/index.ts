@@ -3,12 +3,16 @@
 
 import { main } from './server.js';
 import { startAdminServer, generateFirstAdminKey } from './admin-server.js';
+import { setupAllCronJobs } from './cron-jobs.js';
 
 // Check if we should generate an admin key
 if (process.argv.includes('--generate-admin-key')) {
   generateFirstAdminKey();
   process.exit(0);
 }
+
+// Setup cron jobs for quest resets, leaderboard rewards, etc.
+setupAllCronJobs();
 
 // Start public MCP server
 main().catch(console.error);

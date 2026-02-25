@@ -1,7 +1,7 @@
 // UX - Achievement System handlers for Moltimon TCG
 
 import { v4 as uuidv4 } from "uuid";
-import { db } from '../../database.js';
+import { db, createPack } from '../../database.js';
 import { createNotification } from './notifications.js';
 import type { Achievement, AgentAchievement, AgentStats } from '../../types.js';
 
@@ -212,8 +212,8 @@ export function checkAchievements(agentId: string) {
       if (achievement.reward) {
         const reward = JSON.parse(achievement.reward);
         if (reward.type === 'pack' && reward.pack_type) {
-          // Award pack (could use createPack from database.ts)
-          // For now, just track in data
+          // Award pack using createPack from database.ts
+          createPack(agentId, reward.pack_type);
         } else if (reward.type === 'stat') {
           // Update stat
           db.prepare(`UPDATE agent_stats SET ${reward.stat} = ${reward.stat} + ? WHERE agent_id = ?`)

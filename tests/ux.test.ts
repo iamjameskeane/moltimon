@@ -19,7 +19,12 @@ import {
   checkAchievements,
   getAllQuests,
   getUserQuests,
+  getUserCompletedQuests,
+  getAvailableQuests,
   startQuest,
+  updateQuestProgress,
+  completeQuest,
+  resetQuests,
   initAchievements,
   initQuests,
 } from "../src/handlers/ux/index.ts";
@@ -236,6 +241,115 @@ describe("UX Handlers", () => {
       
       expect(parsed.success).toBe(true);
       expect(parsed.agentQuestId).toBeDefined();
+    });
+
+    it("should update quest progress", () => {
+      const quests = getAllQuests();
+      const parsedQuests = JSON.parse(quests.content[0].text);
+      const questId = parsedQuests.quests[0].id;
+      
+      startQuest(testAgentId, questId);
+      const result = updateQuestProgress(testAgentId, questId, 1);
+      const parsed = JSON.parse(result.content[0].text);
+      
+      expect(parsed.success).toBe(true);
+      expect(parsed.new_progress).toBe(1);
+    });
+
+    it("should complete quest and award pack reward", () => {
+      const quests = getAllQuests();
+      const parsedQuests = JSON.parse(quests.content[0].text);
+      const questId = parsedQuests.quests[0].id;
+      
+      // Start the quest
+      startQuest(testAgentId, questId);
+      
+      // Complete it
+      const result = completeQuest(testAgentId, questId);
+      const parsed = JSON.parse(result.content[0].text);
+      
+      expect(parsed.success).toBe(true);
+      expect(parsed.message).toBe("Quest completed!");
+      
+      // Check that pack was awarded by querying packs table
+      const packs = db.prepare("SELECT * FROM packs WHERE owner_agent_id = ? AND opened = FALSE").all(testAgentId);
+      expect(packs.length).toBeGreaterThan(0);
+    });
+
+    it("should get user completed quests", () => {
+      const quests = getAllQuests();
+      const parsedQuests = JSON.parse(quests.content[0].text);
+      const questId = parsedQuests.quests[0].id;
+      
+      startQuest(testAgentId, questId);
+      completeQuest(testAgentId, questId);
+      
+      const result = getUserCompletedQuests(testAgentId);
+      const parsed = JSON.parse(result.content[0].text);
+      
+      expect(parsed.success).toBe(true);
+      expect(parsed.quests.length).toBeGreaterThan(0);
+    });
+
+    it("should get available quests", () => {
+      const result = getAvailableQuests(testAgentId);
+      const parsed = JSON.parse(result.content[0].text);
+      
+      expect(parsed.success).toBe(true);
+      expect(parsed.quests).toBeDefined();
+    });
+
+    it("should reset quests", () => {
+      const quests = getAllQuests();
+      const parsedQuests = JSON.parse(quests.content[0].text);
+      const dailyQuest = parsedQuests.quests.find((q: any) => q.type === 'daily');
+      
+      if (dailyQuest) {
+        startQuest(testAgentId, dailyQuest.id);
+        completeQuest(testAgentId, dailyQuest.id);
+        
+        // Reset daily quests
+        const result = resetQuests('daily');
+        const parsed = JSON.parse(result.content[0].text);
+        
+        expect(parsed.success).toBe(true);
+        expect(parsed.message).toContain('Reset daily quests');
+      }
+    });
+  });
+
+  describe("Achievements", () => {
+    it("should get available achievements", () => {
+      const result = getAllAchievements();
+      const parsed = JSON.parse(result.content[0].text);
+      
+      expect(parsed.success).toBe(true);
+      expect(parsed.achievements.length).toBeGreaterThan(0);
+    });
+
+    it("should check achievements and award packs", () => {
+      // Create some stats to trigger an achievement
+      db.prepare("UPDATE agent_stats SET wins = 10 WHERE agent_id = ?").run(testAgentId);
+      
+      const result = checkAchievements(testAgentId);
+      const parsed = JSON.parse(result.content[0].text);
+      
+      expect(parsed.success).toBe(true);
+      
+      // Check if any achievements were unlocked
+      if (parsed.count > 0) {
+        // Check that pack was awarded by querying packs table
+        const packs = db.prepare("SELECT * FROM packs WHERE owner_agent_id = ? AND opened = FALSE").all(testAgentId);
+        expect(packs.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("should get user achievements", () => {
+      const result = getUserAchievements(testAgentId);
+      const parsed = JSON.parse(result.content[0].text);
+      
+      expect(parsed.success).toBe(true);
+      expect(parsed.achievements).toBeDefined();
     });
   });
 });

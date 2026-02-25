@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { db, getOrCreateAgent, createPack } from '../database.js';
 import { generateAdminKey, verifyAdminKey } from '../utils/auth.js';
+import { updateQuestProgress, checkAchievements } from '../handlers/ux/index.js';
+import { createNotification } from '../handlers/ux/notifications.js';
 
 export function handleAdminGivePack(agentName: string, packType: string) {
   // Use agent name as Moltbook ID since admin is providing a name
@@ -558,6 +560,26 @@ export function handleGiveCard(agentName: string, templateId: number, _rarity: s
     VALUES (?, ?, ?, ?, ?)
   `).run(cardId, templateId, cardRarity, mintNumber.count + 1, agent.id);
 
+  // Update cards_collected stat
+  db.prepare("UPDATE agent_stats SET cards_collected = cards_collected + 1 WHERE agent_id = ?").run(agent.id);
+  
+  // Update quest progress for collection-related quests
+  try {
+    // Get quest ID by name
+    const weeklyCollectorQuest = db.prepare("SELECT id FROM quests WHERE name = ?").get('Weekly Collector') as { id: string } | undefined;
+    
+    // Update quest progress (cards_needed)
+    if (weeklyCollectorQuest) {
+      updateQuestProgress(agent.id, weeklyCollectorQuest.id, 1);
+    }
+    
+    // Check achievements
+    checkAchievements(agent.id);
+  } catch (e) {
+    // Quest/achievement updates are non-critical, don't fail the admin action
+    console.error('Error updating quest/achievement progress:', e);
+  }
+
   return {
     content: [{
       type: "text",
@@ -572,3 +594,194 @@ export function handleGiveCard(agentName: string, templateId: number, _rarity: s
     }],
   };
 }
+
+/**
+ * Reset quests for an agent
+ */
+export function handleAdminResetQuests(agentName: string, questType: 'daily' | 'weekly' | 'all') {
+  const agent = getOrCreateAgent(agentName, agentName);
+  
+  if (questType === 'all') {
+    // Delete all agent_quests entries
+    db.prepare("DELETE FROM agent_quests WHERE agent_id = ?").run(agent.id);
+  } else {
+    // Get quest IDs of the specified type
+    const questIds = db.prepare("SELECT id FROM quests WHERE type = ?").all(questType) as Array<{ id: string }>;
+    const questIdStrings = questIds.map(q => q.id);
+    
+    if (questIdStrings.length > 0) {
+      // Delete agent_quests entries for quests of this type
+      db.prepare("DELETE FROM agent_quests WHERE agent_id = ? AND quest_id IN (" + 
+        questIdStrings.map(() => '?').join(',') + ")").run(agent.id, ...questIdStrings);
+    }
+  }
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        success: true,
+        message: `Reset ${questType} quests for ${agentName}`,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Mark a quest as completed for an agent
+ */
+export function handleAdminCompleteQuest(agentName: string, questId: string) {
+  const agent = getOrCreateAgent(agentName, agentName);
+  
+  // Check if the agent has started this quest
+  const existing = db.prepare(`
+    SELECT * FROM agent_quests WHERE agent_id = ? AND quest_id = ?
+  `).get(agent.id, questId);
+  
+  if (existing) {
+    // Update existing quest
+    db.prepare(`
+      UPDATE agent_quests SET is_completed = TRUE, completed_at = CURRENT_TIMESTAMP 
+      WHERE agent_id = ? AND quest_id = ?
+    `).run(agent.id, questId);
+  } else {
+    // Create new agent_quests entry and mark as completed
+    const agentQuestId = uuidv4();
+    db.prepare(`
+      INSERT INTO agent_quests (id, agent_id, quest_id, progress, is_completed, completed_at)
+      VALUES (?, ?, ?, 100, TRUE, CURRENT_TIMESTAMP)
+    `).run(agentQuestId, agent.id, questId);
+  }
+
+  // Get quest name for notification
+  const quest = db.prepare("SELECT name, reward FROM quests WHERE id = ?").get(questId) as { name: string; reward: string } | undefined;
+  
+  // Send notification
+  if (quest) {
+    createNotification(
+      agent.id,
+      'quest',
+      'Quest Completed (Admin)',
+      `You completed: ${quest.name}`,
+      JSON.stringify({ quest: quest.name, reward: quest.reward })
+    );
+    
+    // Award reward
+    if (quest.reward) {
+      const reward = JSON.parse(quest.reward);
+      if (reward.type === 'pack' && reward.pack_type) {
+        createPack(agent.id, reward.pack_type);
+      } else if (reward.type === 'stat' && reward.stat) {
+        db.prepare(`UPDATE agent_stats SET ${reward.stat} = ${reward.stat} + ? WHERE agent_id = ?`)
+          .run(reward.amount, agent.id);
+      }
+    }
+  }
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        success: true,
+        message: `Completed quest for ${agentName}`,
+        quest: quest?.name,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Grant an achievement to an agent
+ */
+export function handleAdminGrantAchievement(agentName: string, achievementId: string) {
+  const agent = getOrCreateAgent(agentName, agentName);
+  
+  // Check if achievement already exists
+  const existing = db.prepare(`
+    SELECT * FROM agent_achievements WHERE agent_id = ? AND achievement_id = ?
+  `).get(agent.id, achievementId);
+  
+  if (existing) {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({ success: false, error: "Achievement already granted" }, null, 2),
+      }],
+    };
+  }
+  
+  // Grant achievement
+  const agentAchievementId = uuidv4();
+  db.prepare(`
+    INSERT INTO agent_achievements (id, agent_id, achievement_id)
+    VALUES (?, ?, ?)
+  `).run(agentAchievementId, agent.id, achievementId);
+  
+  // Get achievement name for notification
+  const achievement = db.prepare("SELECT name, reward FROM achievements WHERE id = ?").get(achievementId) as { name: string; reward: string } | undefined;
+  
+  // Send notification
+  if (achievement) {
+    createNotification(
+      agent.id,
+      'achievement',
+      'Achievement Granted (Admin)',
+      `You unlocked: ${achievement.name}`,
+      JSON.stringify({ achievement: achievement.name, reward: achievement.reward })
+    );
+    
+    // Award reward
+    if (achievement.reward) {
+      const reward = JSON.parse(achievement.reward);
+      if (reward.type === 'pack' && reward.pack_type) {
+        createPack(agent.id, reward.pack_type);
+      } else if (reward.type === 'stat') {
+        db.prepare(`UPDATE agent_stats SET ${reward.stat} = ${reward.stat} + ? WHERE agent_id = ?`)
+          .run(reward.amount, agent.id);
+      }
+    }
+  }
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        success: true,
+        message: `Granted achievement to ${agentName}`,
+        achievement: achievement?.name,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Remove an achievement from an agent
+ */
+export function handleAdminRemoveAchievement(agentName: string, achievementId: string) {
+  const agent = getOrCreateAgent(agentName, agentName);
+  
+  const result = db.prepare(`
+    DELETE FROM agent_achievements WHERE agent_id = ? AND achievement_id = ?
+  `).run(agent.id, achievementId);
+  
+  if (result.changes === 0) {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({ success: false, error: "Achievement not found for this agent" }, null, 2),
+      }],
+    };
+  }
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        success: true,
+        message: `Removed achievement from ${agentName}`,
+      }, null, 2),
+    }],
+  };
+}
+
+

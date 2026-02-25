@@ -30,6 +30,10 @@ import {
   handleExportDatabase,
   handleDeleteCard,
   handleGiveCard,
+  handleAdminResetQuests,
+  handleAdminCompleteQuest,
+  handleAdminGrantAchievement,
+  handleAdminRemoveAchievement,
 } from './handlers/admin.js';
 import {
   getNotifications, getNotificationCount, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification,
@@ -42,6 +46,7 @@ import {
 } from './handlers/ux/index.js';
 import { addDailyLoginInfo } from './utils/daily-login.js';
 import { generateAdminKey } from './utils/auth.js';
+import { setupAllCronJobs } from './cron-jobs.js';
 
 // Initialize database schema
 initializeSchema();
@@ -49,6 +54,11 @@ initializeSchema();
 // Initialize achievements and quests
 initAchievements();
 initQuests();
+
+// Setup cron jobs (only if not in test mode)
+if (process.env.NODE_ENV !== 'test') {
+  setupAllCronJobs();
+}
 
 // Create Express app for admin REST server
 const app = express();
@@ -337,6 +347,68 @@ app.post('/admin/card/give', (req: Request, res: Response) => {
     }
 
     const result = handleGiveCard(agent_name, template_id, rarity);
+    const parsedResult = JSON.parse(result.content[0].text);
+    res.json(parsedResult);
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// Quest management routes
+app.post('/admin/quests/reset', (req: Request, res: Response) => {
+  try {
+    const { agent_name, quest_type } = req.body;
+    if (!agent_name || !quest_type) {
+      return res.status(400).json({ success: false, error: 'agent_name and quest_type are required' });
+    }
+
+    const result = handleAdminResetQuests(agent_name, quest_type);
+    const parsedResult = JSON.parse(result.content[0].text);
+    res.json(parsedResult);
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+app.post('/admin/quests/complete', (req: Request, res: Response) => {
+  try {
+    const { agent_name, quest_id } = req.body;
+    if (!agent_name || !quest_id) {
+      return res.status(400).json({ success: false, error: 'agent_name and quest_id are required' });
+    }
+
+    const result = handleAdminCompleteQuest(agent_name, quest_id);
+    const parsedResult = JSON.parse(result.content[0].text);
+    res.json(parsedResult);
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// Achievement management routes
+app.post('/admin/achievements/grant', (req: Request, res: Response) => {
+  try {
+    const { agent_name, achievement_id } = req.body;
+    if (!agent_name || !achievement_id) {
+      return res.status(400).json({ success: false, error: 'agent_name and achievement_id are required' });
+    }
+
+    const result = handleAdminGrantAchievement(agent_name, achievement_id);
+    const parsedResult = JSON.parse(result.content[0].text);
+    res.json(parsedResult);
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+app.post('/admin/achievements/remove', (req: Request, res: Response) => {
+  try {
+    const { agent_name, achievement_id } = req.body;
+    if (!agent_name || !achievement_id) {
+      return res.status(400).json({ success: false, error: 'agent_name and achievement_id are required' });
+    }
+
+    const result = handleAdminRemoveAchievement(agent_name, achievement_id);
     const parsedResult = JSON.parse(result.content[0].text);
     res.json(parsedResult);
   } catch (error) {

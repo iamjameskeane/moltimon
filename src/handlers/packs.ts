@@ -5,6 +5,7 @@ import { db, getOrCreateAgent } from '../database.js';
 import { calculatePower, pickRarity } from '../utils.js';
 import { PACK_DISTRIBUTION, PACK } from '../config.js';
 import type { Card } from '../types.js';
+import { updateQuestProgress, checkAchievements } from '../handlers/ux/index.js';
 
 export function handleGetPacks(agentId: string, agentName: string) {
   getOrCreateAgent(agentId, agentName);
@@ -105,6 +106,26 @@ export function handleOpenPack(agentId: string, packId: string) {
   // Mark pack as opened
   db.prepare("UPDATE packs SET opened = TRUE WHERE id = ?").run(packId);
   db.prepare("UPDATE agent_stats SET packs_opened = packs_opened + 1 WHERE agent_id = ?").run(agentId);
+  
+  // Update cards_collected stat
+  db.prepare("UPDATE agent_stats SET cards_collected = cards_collected + ? WHERE agent_id = ?").run(cards.length, agentId);
+
+  // Update quest progress for collection-related quests
+  try {
+    // Get quest IDs by name
+    const weeklyCollectorQuest = db.prepare("SELECT id FROM quests WHERE name = ?").get('Weekly Collector') as { id: string } | undefined;
+    
+    // Update quest progress for cards collected
+    if (weeklyCollectorQuest) {
+      updateQuestProgress(agentId, weeklyCollectorQuest.id, cards.length);
+    }
+    
+    // Check achievements
+    checkAchievements(agentId);
+  } catch (e) {
+    // Quest/achievement updates are non-critical, don't fail the pack opening
+    console.error('Error updating quest/achievement progress:', e);
+  }
 
   return {
     content: [{

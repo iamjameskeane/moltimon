@@ -226,4 +226,63 @@ export const tools = [
       required: ["moltbook_api_key", "agent_name", "template_id", "rarity"],
     },
   },
+
+  // Quest management
+  {
+    name: "moltimon_admin_reset_quests",
+    description: "Reset quests for an agent (admin only)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+        agent_name: { type: "string" },
+        quest_type: { type: "string", enum: ["daily", "weekly", "all"] },
+      },
+      required: ["moltbook_api_key", "agent_name", "quest_type"],
+    },
+  },
+
+  {
+    name: "moltimon_admin_complete_quest",
+    description: "Mark a quest as completed for an agent (admin only)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+        agent_name: { type: "string" },
+        quest_id: { type: "string" },
+      },
+      required: ["moltbook_api_key", "agent_name", "quest_id"],
+    },
+  },
+
+  // Achievement management
+  {
+    name: "moltimon_admin_grant_achievement",
+    description: "Grant an achievement to an agent (admin only)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+        agent_name: { type: "string" },
+        achievement_id: { type: "string" },
+      },
+      required: ["moltbook_api_key", "agent_name", "achievement_id"],
+    },
+  },
+
+  {
+    name: "moltimon_admin_remove_achievement",
+    description: "Remove an achievement from an agent (admin only)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...apiKeyProperty,
+        agent_name: { type: "string" },
+        achievement_id: { type: "string" },
+      },
+      required: ["moltbook_api_key", "agent_name", "achievement_id"],
+    },
+  },
+
 ];

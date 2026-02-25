@@ -43,7 +43,9 @@ import {
   // Achievements
   initAchievements, getAllAchievements, getUserAchievements, checkAchievements,
   // Quests
-  initQuests, getAllQuests, getUserQuests, getAvailableQuests, startQuest,
+  initQuests, getAllQuests, getUserQuests, getUserCompletedQuests, getAvailableQuests, startQuest, updateQuestProgress, resetQuests,
+  // Achievements
+  getAvailableAchievements,
 } from './handlers/ux/index.js';
 
 // Initialize database schema
@@ -331,6 +333,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "moltimon_start_quest":
         result = startQuest(agentId!, (args as any).quest_id);
+        break;
+
+      case "moltimon_get_user_completed_quests":
+        result = getUserCompletedQuests(agentId!);
+        break;
+
+      case "moltimon_update_quest_progress":
+        result = updateQuestProgress(agentId!, (args as any).quest_id, (args as any).increment || 1);
+        break;
+
+      case "moltimon_reset_quests":
+        result = resetQuests((args as any).type);
+        break;
+
+      case "moltimon_get_available_achievements":
+        result = getAvailableAchievements(agentId!);
         break;
 
       default:
@@ -709,6 +727,22 @@ export async function main() {
 
           case "moltimon_start_quest":
             result = startQuest(agentId, (args as any).quest_id);
+            break;
+
+          case "moltimon_get_user_completed_quests":
+            result = getUserCompletedQuests(agentId);
+            break;
+
+          case "moltimon_update_quest_progress":
+            result = updateQuestProgress(agentId, (args as any).quest_id, (args as any).increment || 1);
+            break;
+
+          case "moltimon_reset_quests":
+            result = resetQuests((args as any).type);
+            break;
+
+          case "moltimon_get_available_achievements":
+            result = getAvailableAchievements(agentId);
             break;
 
           default:

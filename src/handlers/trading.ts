@@ -2,6 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { db, getOrCreateAgent } from '../database.js';
+import { updateQuestProgress, checkAchievements } from '../handlers/ux/index.js';
 
 export function handleTradeRequest(agentId: string, toAgent: string, offer: string[], want: string[]) {
   // Verify ownership of offered cards
@@ -51,6 +52,29 @@ export function handleTradeAccept(agentId: string, tradeId: string) {
   db.prepare("UPDATE trades SET status = 'accepted', resolved_at = CURRENT_TIMESTAMP WHERE id = ?").run(tradeId);
   db.prepare("UPDATE agent_stats SET trades_completed = trades_completed + 1 WHERE agent_id = ?").run(agentId);
   db.prepare("UPDATE agent_stats SET trades_completed = trades_completed + 1 WHERE agent_id = ?").run(trade.from_agent_id);
+  
+  // Update cards_collected stat (count new cards acquired)
+  db.prepare("UPDATE agent_stats SET cards_collected = cards_collected + ? WHERE agent_id = ?").run(wantedCards.length, agentId);
+  db.prepare("UPDATE agent_stats SET cards_collected = cards_collected + ? WHERE agent_id = ?").run(offeredCards.length, trade.from_agent_id);
+  
+  // Update quest progress for trade-related quests
+  try {
+    // Get quest IDs by name
+    const dailyTradingQuest = db.prepare("SELECT id FROM quests WHERE name = ?").get('Daily Trading') as { id: string } | undefined;
+    
+    // Update quest progress for both agents (trades_needed)
+    if (dailyTradingQuest) {
+      updateQuestProgress(agentId, dailyTradingQuest.id, 1);
+      updateQuestProgress(trade.from_agent_id, dailyTradingQuest.id, 1);
+    }
+    
+    // Check achievements for both agents
+    checkAchievements(agentId);
+    checkAchievements(trade.from_agent_id);
+  } catch (e) {
+    // Quest/achievement updates are non-critical, don't fail the trade
+    console.error('Error updating quest/achievement progress:', e);
+  }
 
   return {
     content: [{

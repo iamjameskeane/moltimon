@@ -93,11 +93,15 @@ export function getOrCreateAgent(moltbookId: string, name: string): Agent {
     SELECT * FROM agents WHERE moltbook_id = ?
   `).get(moltbookId) as Agent | undefined;
   
+  console.log("getOrCreateAgent: Existing by Moltbook ID:", existing ? existing.id : "not found");
+  
   // Also check if agent exists by name (fallback for old data)
   if (!existing) {
     existing = db.prepare(`
       SELECT * FROM agents WHERE name = ?
     `).get(name) as Agent | undefined;
+    
+    console.log("getOrCreateAgent: Existing by name:", existing ? existing.id : "not found");
     
     // If found by name but no moltbook_id, update it
     if (existing && !existing.moltbook_id) {
@@ -109,6 +113,7 @@ export function getOrCreateAgent(moltbookId: string, name: string): Agent {
   }
   
   if (existing) {
+    console.log("getOrCreateAgent: Returning existing agent:", existing.id);
     // Bug 3 fix: Ensure agent_stats exists even for existing agents
     const statsExists = db.prepare("SELECT 1 FROM agent_stats WHERE agent_id = ?").get(existing.id);
     if (!statsExists) {
@@ -122,12 +127,15 @@ export function getOrCreateAgent(moltbookId: string, name: string): Agent {
     
     // Update name if it differs
     if (existing.name !== name) {
+      console.log("getOrCreateAgent: Updating name from", existing.name, "to", name);
       db.prepare("UPDATE agents SET name = ? WHERE id = ?").run(name, existing.id);
       existing.name = name;
     }
     
     return existing;
   }
+  
+  console.log("getOrCreateAgent: Creating new agent with moltbookId:", moltbookId, "name:", name);
 
   // Generate internal UUID for our system
   const internalId = uuidv4();

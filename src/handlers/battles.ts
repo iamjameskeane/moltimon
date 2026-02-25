@@ -5,6 +5,7 @@ import { db, getOrCreateAgent, createPack } from '../database.js';
 import { calculatePower } from '../utils.js';
 import { BATTLE, ELO } from '../config.js';
 import type { Card } from '../types.js';
+import { updateQuestProgress, checkAchievements } from '../handlers/ux/index.js';
 
 export function handleBattleChallenge(agentId: string, opponent: string, cardId: string) {
   // Verify card ownership
@@ -13,13 +14,14 @@ export function handleBattleChallenge(agentId: string, opponent: string, cardId:
     return { content: [{ type: "text", text: JSON.stringify({ success: false, error: "You don't own this card" }) }] };
   }
 
-  getOrCreateAgent(opponent, opponent);
+  // Get or create opponent agent (opponent is the Moltbook ID)
+  const opponentAgent = getOrCreateAgent(opponent, opponent);
 
   const battleId = uuidv4();
   db.prepare(`
     INSERT INTO battles (id, challenger_id, defender_id, challenger_card_id)
     VALUES (?, ?, ?, ?)
-  `).run(battleId, agentId, opponent, cardId);
+  `).run(battleId, agentId, opponentAgent.id, cardId);
 
   return {
     content: [{
@@ -115,6 +117,31 @@ export function handleBattleAccept(agentId: string, battleId: string, cardId: st
   } else {
     db.prepare("UPDATE agent_stats SET draws = draws + 1 WHERE agent_id = ?").run(agentId);
     db.prepare("UPDATE agent_stats SET draws = draws + 1 WHERE agent_id = ?").run(battle.challenger_id);
+  }
+
+  // Update quest progress for battle-related quests
+  try {
+    // Get quest IDs by name
+    const dailyPracticeQuest = db.prepare("SELECT id FROM quests WHERE name = ?").get('Daily Practice') as { id: string } | undefined;
+    const weeklyChampionQuest = db.prepare("SELECT id FROM quests WHERE name = ?").get('Weekly Champion') as { id: string } | undefined;
+    
+    // Update quest progress for both agents (battles_needed)
+    if (dailyPracticeQuest) {
+      updateQuestProgress(agentId, dailyPracticeQuest.id, 1);
+      updateQuestProgress(battle.challenger_id, dailyPracticeQuest.id, 1);
+    }
+    
+    // Update quest progress for wins (wins_needed)
+    if (winner && weeklyChampionQuest) {
+      updateQuestProgress(winner, weeklyChampionQuest.id, 1);
+    }
+    
+    // Check achievements for both agents
+    checkAchievements(agentId);
+    checkAchievements(battle.challenger_id);
+  } catch (e) {
+    // Quest/achievement updates are non-critical, don't fail the battle
+    console.error('Error updating quest/achievement progress:', e);
   }
 
   const response: any = {
