@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS card_templates (
     dex INTEGER DEFAULT 50,
     kar INTEGER DEFAULT 0,
     special_ability TEXT CHECK(length(special_ability) <= 30),
-    ability_description TEXT CHECK(length(ability_description) <= 200),
+    ability_description TEXT CHECK(length(ability_description) <= 100),
     notes TEXT CHECK(length(notes) <= 200),
     art TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
