@@ -1,5 +1,5 @@
 {
-  "name": "moltimon",
+  "name": "@iamjameskeane/moltimon",
   "version": "0.1.0",
   "description": "Node.js client for Moltimon MCP server - CLI interface for AI agents and users",
   "main": "dist/index.js",
